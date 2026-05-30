@@ -13,21 +13,23 @@ import { InformationManagement } from "./pages/InformationManagement";
 import { BookingDispatch } from "./pages/BookingDispatch";
 import { AuditLogPage } from "./pages/AuditLog";
 import { Topbar } from "./components/Topbar";
+import { MobileBottomNav } from "./components/MobileBottomNav";
 import NotFound from "./pages/NotFound";
 
 const queryClient = new QueryClient();
 
-/** Full layout: topbar only (admin) */
+/** Full layout: topbar + mobile bottom nav (admin) */
 const AppLayout = ({ children }: { children: React.ReactNode }) => {
   const { logout, user } = useAuth();
   return (
     <div className="flex flex-col min-h-screen">
       <Topbar userName={user?.username || "User"} onLogout={logout} />
       <div className="flex flex-1">
-        <div className="flex-1 flex flex-col bg-off-white min-w-0">
+        <div className="flex-1 flex flex-col bg-off-white min-w-0 pb-20 md:pb-0">
           {children}
         </div>
       </div>
+      <MobileBottomNav />
     </div>
   );
 };
