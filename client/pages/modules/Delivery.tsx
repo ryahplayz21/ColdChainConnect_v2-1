@@ -61,6 +61,7 @@ export function DeliveryDispatch() {
   const [showAddDeliveryModal, setShowAddDeliveryModal] = useState(false);
   const [showChangeDriverModal,setShowChangeDriverModal]= useState(false);
   const [confirmingItem,       setConfirmingItem]       = useState<string | null>(null);
+  const [deliverySearchQuery,  setDeliverySearchQuery]  = useState("");
 
   // Mobile: track which "panel" is visible — "trucks" | "detail"
   const [mobileView, setMobileView] = useState<"trucks" | "detail">("trucks");
@@ -127,7 +128,13 @@ export function DeliveryDispatch() {
   useEffect(() => { fetchAll(); }, [fetchAll]);
 
   const truckDeliveries = selectedTruck
-    ? deliveries.filter((d) => d.truck_id === selectedTruck.id)
+    ? deliveries.filter((d) => {
+        const matchesTruck = d.truck_id === selectedTruck.id;
+        const matchesSearch =
+          d.id.toLowerCase().includes(deliverySearchQuery.toLowerCase()) ||
+          d.delivery_items.some(item => item.customer?.store_name?.toLowerCase().includes(deliverySearchQuery.toLowerCase()));
+        return matchesTruck && matchesSearch;
+      })
     : [];
 
   const handleConfirm = async (delivery: DeliveryExt, item: DeliveryItemExt) => {
@@ -237,6 +244,15 @@ export function DeliveryDispatch() {
           + Add Delivery
         </button>
       </div>
+
+      {/* Search Bar */}
+      <input
+        type="text"
+        value={deliverySearchQuery}
+        onChange={(e) => setDeliverySearchQuery(e.target.value)}
+        placeholder="Search deliveries by ID or customer…"
+        className="w-full px-4 py-2 border border-border rounded-lg text-sm focus:outline-none focus:border-accent-2"
+      />
 
       {/* Deliveries */}
       <p className="text-xs font-semibold text-muted uppercase tracking-wider">
