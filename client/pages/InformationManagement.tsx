@@ -20,7 +20,7 @@ export function InformationManagement() {
     <InventoryProvider>
       <div className="flex h-full">
         <HubSidebar modules={modules} basePath="/information-management" />
-        <div className="flex-1 overflow-auto">
+        <div className="flex-1 overflow-auto pb-20 md:pb-0">
           <Routes>
             <Route path="/pricing" element={<Pricing />} />
             <Route path="/inventory" element={<Inventory />} />

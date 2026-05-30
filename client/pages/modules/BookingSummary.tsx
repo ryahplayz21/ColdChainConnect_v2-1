@@ -3,7 +3,9 @@ import { Card } from "@/components/ui/card";
 import {
   Table, TableBody, TableCell, TableHead, TableHeader, TableRow,
 } from "@/components/ui/table";
-import { RefreshCw, Plus } from "lucide-react";
+import { Calendar } from "@/components/ui/calendar";
+import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
+import { RefreshCw, Plus, Calendar as CalendarIcon, X } from "lucide-react";
 import { SearchFilterBar } from "@/components/SearchFilterBar";
 import { Booking, Truck, Customer, Product } from "@shared/api";
 import { useAuth } from "../../hooks/useAuth";
@@ -19,6 +21,9 @@ export function BookingSummary() {
   const [isRefreshing, setIsRefreshing] = useState(false);
   const [searchTerm, setSearchTerm] = useState("");
   const [statusFilter, setStatusFilter] = useState<"all" | "pending" | "approved" | "prep" | "ready">("all");
+  const [dateFilter, setDateFilter] = useState<"all" | "today" | "week" | "month">("all");
+  const [customStartDate, setCustomStartDate] = useState<Date | undefined>(undefined);
+  const [customEndDate, setCustomEndDate] = useState<Date | undefined>(undefined);
 
   // Assign truck modal
   const [selectedBooking, setSelectedBooking] = useState<Booking | null>(null);
@@ -71,6 +76,46 @@ export function BookingSummary() {
       ready: "bg-green-100 text-green-800",
     };
     return colors[status] || "bg-gray-100 text-gray-800";
+  };
+
+  const getDateCategory = (dateString: string) => {
+    const date = new Date(dateString);
+    const today = new Date();
+    const yesterday = new Date(today);
+    yesterday.setDate(yesterday.getDate() - 1);
+    const weekAgo = new Date(today);
+    weekAgo.setDate(weekAgo.getDate() - 7);
+    const monthAgo = new Date(today);
+    monthAgo.setMonth(monthAgo.getMonth() - 1);
+
+    const dateNorm = new Date(date.getFullYear(), date.getMonth(), date.getDate());
+    const todayNorm = new Date(today.getFullYear(), today.getMonth(), today.getDate());
+    const yesterdayNorm = new Date(yesterday.getFullYear(), yesterday.getMonth(), yesterday.getDate());
+
+    if (dateNorm.getTime() === todayNorm.getTime()) return "today";
+    if (dateNorm.getTime() === yesterdayNorm.getTime()) return "yesterday";
+    if (date >= weekAgo) return "week";
+    if (date >= monthAgo) return "month";
+    return "older";
+  };
+
+  const formatDateGroupLabel = (category: string) => {
+    const today = new Date();
+    const dateStr = today.toLocaleDateString("en-PH", { weekday: "short", month: "short", day: "numeric", year: "numeric" });
+    switch (category) {
+      case "today":
+        return `Today — ${dateStr}`;
+      case "yesterday":
+        return "Yesterday";
+      case "week":
+        return "This Week";
+      case "month":
+        return "This Month";
+      case "older":
+        return "Older";
+      default:
+        return category;
+    }
   };
 
   // ── Add Order ──────────────────────────────────────────────
@@ -149,8 +194,37 @@ export function BookingSummary() {
       b.customer_id.toLowerCase().includes(searchTerm.toLowerCase());
     if (!matchesSearch) return false;
     if (statusFilter !== "all" && b.status !== statusFilter) return false;
+
+    // Check custom date range first
+    if (customStartDate || customEndDate) {
+      const bookingDate = new Date(b.created_at);
+      const bookingDateNorm = new Date(bookingDate.getFullYear(), bookingDate.getMonth(), bookingDate.getDate());
+      if (customStartDate) {
+        const startNorm = new Date(customStartDate.getFullYear(), customStartDate.getMonth(), customStartDate.getDate());
+        if (bookingDateNorm < startNorm) return false;
+      }
+      if (customEndDate) {
+        const endNorm = new Date(customEndDate.getFullYear(), customEndDate.getMonth(), customEndDate.getDate());
+        if (bookingDateNorm > endNorm) return false;
+      }
+    } else if (dateFilter !== "all") {
+      const category = getDateCategory(b.created_at);
+      if (dateFilter === "today" && category !== "today") return false;
+      if (dateFilter === "week" && !["today", "yesterday", "week"].includes(category)) return false;
+      if (dateFilter === "month" && !["today", "yesterday", "week", "month"].includes(category)) return false;
+    }
     return true;
   });
+
+  const groupedByDate = filtered.reduce((acc: Record<string, typeof filtered>, booking) => {
+    const category = getDateCategory(booking.created_at);
+    if (!acc[category]) acc[category] = [];
+    acc[category].push(booking);
+    return acc;
+  }, {});
+
+  const dateOrder = ["today", "yesterday", "week", "month", "older"];
+  const sortedDateCategories = dateOrder.filter((cat) => groupedByDate[cat]);
 
   return (
     <div className="flex-1 flex flex-col p-6 gap-6">
@@ -184,6 +258,89 @@ export function BookingSummary() {
         </Card>
       )}
 
+      {/* Date Filter */}
+      <div className="flex flex-col gap-3">
+        <div className="flex gap-2 overflow-x-auto pb-1">
+          {[
+            { value: "all" as const, label: "All Dates" },
+            { value: "today" as const, label: "Today" },
+            { value: "week" as const, label: "This Week" },
+            { value: "month" as const, label: "This Month" },
+          ].map((option) => (
+            <button
+              key={option.value}
+              onClick={() => {
+                setDateFilter(option.value);
+                if (option.value !== "all") {
+                  setCustomStartDate(undefined);
+                  setCustomEndDate(undefined);
+                }
+              }}
+              className={`px-4 py-2 rounded-full text-sm font-semibold whitespace-nowrap transition-colors ${
+                dateFilter === option.value && !customStartDate && !customEndDate
+                  ? "bg-accent-2 text-white"
+                  : "bg-off-white text-navy hover:bg-white border border-border"
+              }`}
+            >
+              {option.label}
+            </button>
+          ))}
+        </div>
+
+        {/* Custom Date Range Picker */}
+        <div className="flex gap-2 items-center">
+          <span className="text-xs font-semibold text-muted uppercase tracking-wider">Or select date range:</span>
+          <Popover>
+            <PopoverTrigger asChild>
+              <button className="px-3 py-2 border border-border rounded-lg text-sm bg-white hover:bg-off-white flex items-center gap-2">
+                <CalendarIcon size={16} />
+                {customStartDate
+                  ? `${customStartDate.toLocaleDateString()} ${customEndDate ? `- ${customEndDate.toLocaleDateString()}` : ""}`
+                  : "Pick dates"}
+              </button>
+            </PopoverTrigger>
+            <PopoverContent className="w-auto p-0" align="start">
+              <div className="p-4 space-y-4">
+                <div>
+                  <p className="text-xs font-semibold text-navy mb-2">Start Date</p>
+                  <Calendar
+                    mode="single"
+                    selected={customStartDate}
+                    onSelect={(date) => {
+                      setCustomStartDate(date);
+                      setDateFilter("all");
+                    }}
+                  />
+                </div>
+                <div>
+                  <p className="text-xs font-semibold text-navy mb-2">End Date</p>
+                  <Calendar
+                    mode="single"
+                    selected={customEndDate}
+                    onSelect={(date) => {
+                      setCustomEndDate(date);
+                      setDateFilter("all");
+                    }}
+                  />
+                </div>
+                {(customStartDate || customEndDate) && (
+                  <button
+                    onClick={() => {
+                      setCustomStartDate(undefined);
+                      setCustomEndDate(undefined);
+                      setDateFilter("all");
+                    }}
+                    className="w-full px-3 py-2 text-sm border border-red-300 text-red-600 rounded-lg hover:bg-red-50 flex items-center justify-center gap-2"
+                  >
+                    <X size={14} /> Clear Dates
+                  </button>
+                )}
+              </div>
+            </PopoverContent>
+          </Popover>
+        </div>
+      </div>
+
       <SearchFilterBar
         searchTerm={searchTerm}
         onSearchChange={setSearchTerm}
@@ -202,78 +359,88 @@ export function BookingSummary() {
         }]}
       />
 
-      {/* Table */}
-      <Card className="overflow-hidden">
-        <Table>
-          <TableHeader>
-            <TableRow>
-              <TableHead>Order ID</TableHead>
-              <TableHead>Customer</TableHead>
-              <TableHead>Assigned Truck</TableHead>
-              <TableHead>Status</TableHead>
-              <TableHead>Created</TableHead>
-              <TableHead className="text-right">Actions</TableHead>
-            </TableRow>
-          </TableHeader>
-          <TableBody>
-            {filtered.length === 0 ? (
-              <TableRow>
-                <TableCell colSpan={6} className="text-center py-8 text-gray-500">
-                  {bookings.length === 0 ? "No orders found" : "No orders match your search"}
-                </TableCell>
-              </TableRow>
-            ) : (
-              filtered.map((booking) => {
-                const customer = booking.customer;
-                const assignedTruck = trucks.find((t) => t.id === (booking as any).driver_id);
-                return (
-                  <TableRow key={booking.id}>
-                    <TableCell className="font-mono text-sm">{booking.id.slice(0, 8)}</TableCell>
-                    <TableCell className="text-sm">
-                      {customer ? (
-                        <div className="flex flex-col">
-                          <span className="font-semibold text-navy">{customer.store_name}</span>
-                          {customer.contact_info && (
-                            <span className="text-xs text-muted">{customer.contact_info}</span>
-                          )}
-                        </div>
-                      ) : (
-                        <span className="text-muted">Unknown customer</span>
-                      )}
-                    </TableCell>
-                    <TableCell className="text-sm">
-                      {assignedTruck ? (
-                        <div className="flex flex-col">
-                          <span className="font-semibold text-navy">{assignedTruck.name}</span>
-                          <span className="text-xs text-muted">{assignedTruck.district}</span>
-                        </div>
-                      ) : (
-                        <span className="text-muted italic">Not assigned</span>
-                      )}
-                    </TableCell>
-                    <TableCell>
-                      <span className={`px-2 py-1 rounded text-sm ${getStatusColor(booking.status)}`}>
-                        {booking.status}
-                      </span>
-                    </TableCell>
-                    <TableCell className="text-sm">
-                      {new Date(booking.created_at).toLocaleDateString()}
-                    </TableCell>
-                    <TableCell className="text-right">
-                      <button
-                        onClick={() => openAssignModal(booking)}
-                        className="px-3 py-1 text-sm bg-accent-2 text-white rounded hover:opacity-90 transition"
-                      >
-                        Assign Truck
-                      </button>
-                    </TableCell>
-                  </TableRow>
-                );
-              })
-            )}
-          </TableBody>
-        </Table>
-      </Card>
+      {/* Table with Date Grouping */}
+      {filtered.length === 0 ? (
+        <Card className="p-8 text-center text-gray-500">
+          {bookings.length === 0 ? "No orders found" : "No orders match your search"}
+        </Card>
+      ) : (
+        <div className="space-y-4">
+          {sortedDateCategories.map((category) => (
+            <div key={category}>
+              {/* Date Category Header */}
+              <div className="px-4 py-3 bg-off-white rounded-lg border border-border mb-2">
+                <h3 className="text-sm font-bold text-navy">{formatDateGroupLabel(category)} ({groupedByDate[category].length})</h3>
+              </div>
+
+              {/* Table for this category */}
+              <Card className="overflow-hidden">
+                <Table>
+                  <TableHeader>
+                    <TableRow>
+                      <TableHead>Order ID</TableHead>
+                      <TableHead>Customer</TableHead>
+                      <TableHead>Assigned Truck</TableHead>
+                      <TableHead>Status</TableHead>
+                      <TableHead>Created</TableHead>
+                      <TableHead className="text-right">Actions</TableHead>
+                    </TableRow>
+                  </TableHeader>
+                  <TableBody>
+                    {groupedByDate[category].map((booking) => {
+                      const customer = booking.customer;
+                      const assignedTruck = trucks.find((t) => t.id === (booking as any).driver_id);
+                      return (
+                        <TableRow key={booking.id}>
+                          <TableCell className="font-mono text-sm">{booking.id.slice(0, 8)}</TableCell>
+                          <TableCell className="text-sm">
+                            {customer ? (
+                              <div className="flex flex-col">
+                                <span className="font-semibold text-navy">{customer.store_name}</span>
+                                {customer.contact_info && (
+                                  <span className="text-xs text-muted">{customer.contact_info}</span>
+                                )}
+                              </div>
+                            ) : (
+                              <span className="text-muted">Unknown customer</span>
+                            )}
+                          </TableCell>
+                          <TableCell className="text-sm">
+                            {assignedTruck ? (
+                              <div className="flex flex-col">
+                                <span className="font-semibold text-navy">{assignedTruck.name}</span>
+                                <span className="text-xs text-muted">{assignedTruck.district}</span>
+                              </div>
+                            ) : (
+                              <span className="text-muted italic">Not assigned</span>
+                            )}
+                          </TableCell>
+                          <TableCell>
+                            <span className={`px-2 py-1 rounded text-sm ${getStatusColor(booking.status)}`}>
+                              {booking.status}
+                            </span>
+                          </TableCell>
+                          <TableCell className="text-sm">
+                            {new Date(booking.created_at).toLocaleDateString()}
+                          </TableCell>
+                          <TableCell className="text-right">
+                            <button
+                              onClick={() => openAssignModal(booking)}
+                              className="px-3 py-1 text-sm bg-accent-2 text-white rounded hover:opacity-90 transition"
+                            >
+                              Assign Truck
+                            </button>
+                          </TableCell>
+                        </TableRow>
+                      );
+                    })}
+                  </TableBody>
+                </Table>
+              </Card>
+            </div>
+          ))}
+        </div>
+      )}
 
       {/* ── Add Order Modal ── */}
       {showAddModal && (

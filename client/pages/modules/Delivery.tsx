@@ -61,6 +61,7 @@ export function DeliveryDispatch() {
   const [showAddDeliveryModal, setShowAddDeliveryModal] = useState(false);
   const [showChangeDriverModal,setShowChangeDriverModal]= useState(false);
   const [confirmingItem,       setConfirmingItem]       = useState<string | null>(null);
+  const [deliverySearchQuery,  setDeliverySearchQuery]  = useState("");
 
   // Mobile: track which "panel" is visible — "trucks" | "detail"
   const [mobileView, setMobileView] = useState<"trucks" | "detail">("trucks");
@@ -127,7 +128,13 @@ export function DeliveryDispatch() {
   useEffect(() => { fetchAll(); }, [fetchAll]);
 
   const truckDeliveries = selectedTruck
-    ? deliveries.filter((d) => d.truck_id === selectedTruck.id)
+    ? deliveries.filter((d) => {
+        const matchesTruck = d.truck_id === selectedTruck.id;
+        const matchesSearch =
+          d.id.toLowerCase().includes(deliverySearchQuery.toLowerCase()) ||
+          d.delivery_items.some(item => item.customer?.store_name?.toLowerCase().includes(deliverySearchQuery.toLowerCase()));
+        return matchesTruck && matchesSearch;
+      })
     : [];
 
   const handleConfirm = async (delivery: DeliveryExt, item: DeliveryItemExt) => {
@@ -206,10 +213,10 @@ export function DeliveryDispatch() {
           </span>
         </div>
 
-        {/* Agent */}
+        {/* Driver */}
         <div className="border-t border-border pt-3">
           <div className="flex items-center justify-between mb-2">
-            <p className="text-xs font-semibold text-muted uppercase tracking-wider">Agent</p>
+            <p className="text-xs font-semibold text-muted uppercase tracking-wider">Driver</p>
             {truckDeliveries.some((d) => d.status !== "completed") ? (
               <span className="text-xs font-semibold text-accent-2 bg-accent-2/10 px-2 py-1 rounded">Locked</span>
             ) : (
@@ -218,15 +225,18 @@ export function DeliveryDispatch() {
               </button>
             )}
           </div>
-          {selectedTruck!.driver_id ? (
-            <div className="bg-off-white rounded-lg p-3">
-              <p className="font-semibold text-navy text-sm">{drivers.find((d) => d.id === selectedTruck!.driver_id)?.full_name || selectedTruck!.driver_id.slice(0, 8)}</p>
-              {drivers.find((d) => d.id === selectedTruck!.driver_id)?.contact_info && (
-                <p className="text-xs text-muted mt-0.5">{drivers.find((d) => d.id === selectedTruck!.driver_id)?.contact_info}</p>
-              )}
-            </div>
-          ) : (
-            <div className="bg-off-white rounded-lg p-3 text-center text-xs text-muted">No agent assigned</div>
+          {selectedTruck!.driver_id ? (() => {
+            const driver = drivers.find((d) => d.id === selectedTruck!.driver_id);
+            return (
+              <div className="bg-off-white rounded-lg p-3">
+                <p className="font-semibold text-navy text-sm">{driver?.full_name || "Unknown Driver"}</p>
+                {driver?.contact_info && (
+                  <p className="text-xs text-muted mt-0.5">{driver.contact_info}</p>
+                )}
+              </div>
+            );
+          })() : (
+            <div className="bg-off-white rounded-lg p-3 text-center text-xs text-muted">No driver assigned</div>
           )}
         </div>
 
@@ -237,6 +247,15 @@ export function DeliveryDispatch() {
           + Add Delivery
         </button>
       </div>
+
+      {/* Search Bar */}
+      <input
+        type="text"
+        value={deliverySearchQuery}
+        onChange={(e) => setDeliverySearchQuery(e.target.value)}
+        placeholder="Search deliveries by ID or customer…"
+        className="w-full px-4 py-2 border border-border rounded-lg text-sm focus:outline-none focus:border-accent-2"
+      />
 
       {/* Deliveries */}
       <p className="text-xs font-semibold text-muted uppercase tracking-wider">
@@ -661,21 +680,21 @@ function ChangeDriverModal({ truck, drivers, token, onClose, onSave }: {
   const [saving, setSaving] = useState(false);
 
   const handleSave = async () => {
-    if (!selectedDriverId) { alert("Please select an agent"); return; }
+    if (!selectedDriverId) { alert("Please select a driver"); return; }
     setSaving(true);
     try { await onSave(selectedDriverId); }
     finally { setSaving(false); }
   };
 
   return (
-    <ModalShell title={`Change Agent — ${truck.name}`} onClose={onClose}>
+    <ModalShell title={`Change Driver — ${truck.name}`} onClose={onClose}>
       <div>
-        <label className="block text-xs font-semibold text-navy mb-2">Select Agent *</label>
+        <label className="block text-xs font-semibold text-navy mb-2">Select Driver *</label>
         <select value={selectedDriverId} onChange={(e) => setSelectedDriverId(e.target.value)}
           className="w-full px-3 py-2 border border-border rounded-lg text-sm focus:outline-none focus:border-accent-2">
-          <option value="">Choose an agent…</option>
+          <option value="">Choose a driver…</option>
           {drivers.filter((d) => d.is_active).map((d) => (
-            <option key={d.id} value={d.id}>{d.full_name || d.id.slice(0, 8)}{d.contact_info && ` — ${d.contact_info}`}</option>
+            <option key={d.id} value={d.id}>{d.full_name}{d.contact_info && ` — ${d.contact_info}`}</option>
           ))}
         </select>
       </div>
@@ -683,7 +702,7 @@ function ChangeDriverModal({ truck, drivers, token, onClose, onSave }: {
         <button onClick={onClose} className="px-4 py-2 border border-border rounded-lg text-sm font-semibold hover:bg-off-white">Cancel</button>
         <button onClick={handleSave} disabled={!selectedDriverId || saving}
           className="px-4 py-2 bg-accent-2 text-white rounded-lg text-sm font-semibold hover:opacity-90 disabled:opacity-50">
-          {saving ? "Updating…" : "Change Agent"}
+          {saving ? "Updating…" : "Change Driver"}
         </button>
       </div>
     </ModalShell>
