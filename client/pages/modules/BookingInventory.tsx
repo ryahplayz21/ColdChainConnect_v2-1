@@ -25,6 +25,7 @@ export function BookingInventory() {
   const [isLoading, setIsLoading] = useState(true);
   const [isDeleting, setIsDeleting] = useState<string | null>(null);
   const [searchQuery, setSearchQuery] = useState("");
+  const [batchSearchQuery, setBatchSearchQuery] = useState("");
 
   useEffect(() => {
     const load = async () => {
@@ -145,7 +146,14 @@ export function BookingInventory() {
         >
           All Batches
         </button>
-        {currentBatch && currentBatch.id !== "batch-all" && (
+        <ChevronRight size={14} />
+        <button
+          onClick={() => { setSelectedBatchId("batch-all-pallets"); setSelectedPalletId(null); }}
+          className={`font-semibold ${selectedBatchId === "batch-all-pallets" ? "text-navy" : "hover:text-navy"}`}
+        >
+          All Products Pallet
+        </button>
+        {currentBatch && currentBatch.id !== "batch-all" && currentBatch.id !== "batch-all-pallets" && (
           <>
             <ChevronRight size={14} />
             <button
@@ -167,38 +175,97 @@ export function BookingInventory() {
       {/* ── All Batches View ── */}
       {selectedBatchId === "batch-all" && (
         <div className="grid gap-4">
+          {/* Search Bar */}
+          <input
+            type="text"
+            value={batchSearchQuery}
+            onChange={(e) => setBatchSearchQuery(e.target.value)}
+            placeholder="Search batches…"
+            className="w-full px-4 py-2 border border-border rounded-lg text-sm focus:outline-none focus:border-accent-2"
+          />
           {realBatches.length === 0 ? (
             <Card className="p-8 text-center text-gray-400">
               <Package size={32} className="mx-auto mb-2 opacity-40" />
               <p>No batches found. Add batches from the main Inventory page.</p>
             </Card>
           ) : (
-            realBatches.map((batch) => (
-              <Card key={batch.id} className="p-4 flex items-center justify-between hover:shadow-md transition-shadow">
-                <button
-                  className="flex-1 flex items-center gap-4 text-left"
-                  onClick={() => { setSelectedBatchId(batch.id); setSelectedPalletId(null); }}
-                >
-                  <div className="w-10 h-10 rounded-full bg-accent-2/10 flex items-center justify-center">
-                    <Layers size={18} className="text-accent-2" />
-                  </div>
-                  <div>
-                    <p className="font-semibold text-navy">{batch.name}</p>
-                    <p className="text-xs text-muted">{batch.pallets.length} pallet{batch.pallets.length !== 1 ? "s" : ""} · {batch.pallets.reduce((a, p) => a + p.items.length, 0)} items</p>
-                    <p className="text-xs text-muted">{new Date(batch.createdAt).toLocaleDateString()}</p>
-                  </div>
-                </button>
-                <button
-                  onClick={() => handleRemoveBatch(batch.id)}
-                  disabled={isDeleting === batch.id}
-                  className="ml-4 p-2 text-red-400 hover:text-red-600 hover:bg-red-50 rounded-lg transition disabled:opacity-40"
-                  title="Delete batch"
-                >
-                  <Trash2 size={16} />
-                </button>
-              </Card>
-            ))
+            realBatches
+              .filter((batch) => batch.name.toLowerCase().includes(batchSearchQuery.toLowerCase()))
+              .map((batch) => (
+                <Card key={batch.id} className="p-4 flex items-center justify-between hover:shadow-md transition-shadow">
+                  <button
+                    className="flex-1 flex items-center gap-4 text-left"
+                    onClick={() => { setSelectedBatchId(batch.id); setSelectedPalletId(null); }}
+                  >
+                    <div className="w-10 h-10 rounded-full bg-accent-2/10 flex items-center justify-center">
+                      <Layers size={18} className="text-accent-2" />
+                    </div>
+                    <div>
+                      <p className="font-semibold text-navy">{batch.name}</p>
+                      <p className="text-xs text-muted">{batch.pallets.length} pallet{batch.pallets.length !== 1 ? "s" : ""} · {batch.pallets.reduce((a, p) => a + p.items.length, 0)} items</p>
+                      <p className="text-xs text-muted">{new Date(batch.createdAt).toLocaleDateString()}</p>
+                    </div>
+                  </button>
+                  <button
+                    onClick={() => handleRemoveBatch(batch.id)}
+                    disabled={isDeleting === batch.id}
+                    className="ml-4 p-2 text-red-400 hover:text-red-600 hover:bg-red-50 rounded-lg transition disabled:opacity-40"
+                    title="Delete batch"
+                  >
+                    <Trash2 size={16} />
+                  </button>
+                </Card>
+              ))
           )}
+        </div>
+      )}
+
+      {/* ── All Products Pallet View ── */}
+      {selectedBatchId === "batch-all-pallets" && (
+        <div className="flex flex-col gap-4">
+          {/* Collect all pallets from all batches */}
+          {(() => {
+            const allPallets = realBatches.flatMap((batch) =>
+              batch.pallets.map((pallet) => ({ ...pallet, batchId: batch.id, batchName: batch.name }))
+            );
+
+            return allPallets.length === 0 ? (
+              <Card className="p-8 text-center text-gray-400">
+                <Package size={32} className="mx-auto mb-2 opacity-40" />
+                <p>No pallets found.</p>
+              </Card>
+            ) : (
+              <div className="grid gap-4">
+                {allPallets.map((pallet: any) => (
+                  <Card key={pallet.id} className="p-4 flex items-center justify-between hover:shadow-md transition-shadow">
+                    <button
+                      className="flex-1 flex items-center gap-4 text-left"
+                      onClick={() => { setSelectedBatchId(pallet.batchId); setSelectedPalletId(null); }}
+                    >
+                      <div className="w-10 h-10 rounded-full bg-blue-100 flex items-center justify-center">
+                        <Package size={18} className="text-blue-600" />
+                      </div>
+                      <div>
+                        <p className="font-semibold text-navy">Pallet {pallet.palletId}</p>
+                        <p className="text-xs text-muted">Batch: {pallet.batchName}</p>
+                        {pallet.supplierName && <p className="text-xs text-muted">Supplier: {pallet.supplierName}</p>}
+                        {pallet.storageZone && <p className="text-xs text-muted">Zone: {pallet.storageZone}</p>}
+                        <p className="text-xs text-muted">{pallet.items.length} item{pallet.items.length !== 1 ? "s" : ""} · {pallet.items.reduce((a: any, i: any) => a + i.quantity, 0)} units total</p>
+                      </div>
+                    </button>
+                    <button
+                      onClick={() => handleRemovePallet(pallet.id)}
+                      disabled={isDeleting === pallet.id}
+                      className="ml-4 p-2 text-red-400 hover:text-red-600 hover:bg-red-50 rounded-lg transition disabled:opacity-40"
+                      title="Remove pallet"
+                    >
+                      <Trash2 size={16} />
+                    </button>
+                  </Card>
+                ))}
+              </div>
+            );
+          })()}
         </div>
       )}
 
