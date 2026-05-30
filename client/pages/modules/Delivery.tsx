@@ -225,14 +225,17 @@ export function DeliveryDispatch() {
               </button>
             )}
           </div>
-          {selectedTruck!.driver_id ? (
-            <div className="bg-off-white rounded-lg p-3">
-              <p className="font-semibold text-navy text-sm">{drivers.find((d) => d.id === selectedTruck!.driver_id)?.full_name || selectedTruck!.driver_id.slice(0, 8)}</p>
-              {drivers.find((d) => d.id === selectedTruck!.driver_id)?.contact_info && (
-                <p className="text-xs text-muted mt-0.5">{drivers.find((d) => d.id === selectedTruck!.driver_id)?.contact_info}</p>
-              )}
-            </div>
-          ) : (
+          {selectedTruck!.driver_id ? (() => {
+            const driver = drivers.find((d) => d.id === selectedTruck!.driver_id);
+            return (
+              <div className="bg-off-white rounded-lg p-3">
+                <p className="font-semibold text-navy text-sm">{driver?.full_name || "Unknown Driver"}</p>
+                {driver?.contact_info && (
+                  <p className="text-xs text-muted mt-0.5">{driver.contact_info}</p>
+                )}
+              </div>
+            );
+          })() : (
             <div className="bg-off-white rounded-lg p-3 text-center text-xs text-muted">No driver assigned</div>
           )}
         </div>
